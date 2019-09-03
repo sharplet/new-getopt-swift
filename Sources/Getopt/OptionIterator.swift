@@ -2,8 +2,12 @@ import func Foundation.free
 import func Foundation.getopt
 import var Foundation.optarg
 import var Foundation.opterr
+import var Foundation.optind
 import var Foundation.optopt
+import var Foundation.optreset
 import func Foundation.strdup
+
+private var needsReset = false
 
 final class OptionIterator {
   typealias MutableCString = UnsafeMutablePointer<CChar>
@@ -64,6 +68,13 @@ final class OptionIterator {
         }
       }
     }
+
+    opterr = 0
+
+    if needsReset {
+      optind = 1
+      optreset = 1
+    }
   }
 
   deinit {
@@ -96,7 +107,7 @@ final class OptionIterator {
 
 extension OptionIterator: IteratorProtocol {
   func next() -> (option: Unicode.Scalar, argument: String?)? {
-    opterr = 0
+    needsReset = true
     guard getopt(argc, argv.baseAddress, optstring) != -1 else { return nil }
     let argument = optarg.map { String(cString: $0) }
     return (option: currentOption, argument: argument)
