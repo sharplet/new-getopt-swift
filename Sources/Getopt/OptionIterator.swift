@@ -1,19 +1,55 @@
+import func Foundation.free
 import func Foundation.getopt
 import var Foundation.optarg
 import var Foundation.opterr
 import var Foundation.optopt
+import func Foundation.strdup
 
 final class OptionIterator {
-  typealias Argv = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
+  typealias MutableCString = UnsafeMutablePointer<CChar>
+  typealias Argv = UnsafeMutablePointer<MutableCString?>
+  typealias ArgvBuffer = UnsafeMutableBufferPointer<MutableCString?>
 
-  let argc: Int32
-  let argv: Argv
+  private let argc: Int32
+  private let argv: ArgvBuffer
+  private let isManaged: Bool
   private let optstring: UnsafePointer<CChar>
   private let staticOptions: StaticString
 
-  init(argc: Int32, unsafeArgv argv: Argv, options: StaticString) {
+  convenience init(argc: Int32, unsafeArgv argv: Argv, options: StaticString) {
+    self.init(
+      argc: argc,
+      argv: ArgvBuffer(start: argv, count: Int(argc) + 1),
+      isManaged: false,
+      options: options
+    )
+  }
+
+  convenience init(arguments: [String], options: StaticString) {
+    let argc = arguments.count + 1
+    let buffer = ArgvBuffer.allocate(capacity: argc + 1)
+
+    var argv: [MutableCString?] = []
+    argv.append(CommandLine.unsafeArgv[0])
+    argv.append(contentsOf: arguments.map { strdup($0) })
+    argv.append(nil)
+
+    guard case (_, buffer.endIndex) = buffer.initialize(from: argv) else {
+      preconditionFailure("Failed to initialize argv")
+    }
+
+    self.init(
+      argc: Int32(argc),
+      argv: buffer,
+      isManaged: true,
+      options: options
+    )
+  }
+
+  private init(argc: Int32, argv: ArgvBuffer, isManaged: Bool, options: StaticString) {
     self.argc = argc
     self.argv = argv
+    self.isManaged = isManaged
     self.staticOptions = options
 
     if options.hasPointerRepresentation {
@@ -31,6 +67,11 @@ final class OptionIterator {
   }
 
   deinit {
+    if isManaged {
+      argv[managedRange].forEach { free($0) }
+      argv.deallocate()
+    }
+
     if isOptstringManaged {
       optstring.deallocate()
     }
@@ -47,12 +88,16 @@ final class OptionIterator {
   private var isOptstringManaged: Bool {
     !staticOptions.hasPointerRepresentation
   }
+
+  private var managedRange: Range<Int> {
+    1 ..< Int(argc)
+  }
 }
 
 extension OptionIterator: IteratorProtocol {
   func next() -> (option: Unicode.Scalar, argument: String?)? {
     opterr = 0
-    guard getopt(argc, argv, optstring) != -1 else { return nil }
+    guard getopt(argc, argv.baseAddress, optstring) != -1 else { return nil }
     let argument = optarg.map { String(cString: $0) }
     return (option: currentOption, argument: argument)
   }
