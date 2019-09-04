@@ -106,10 +106,22 @@ final class OptionIterator {
 }
 
 extension OptionIterator: IteratorProtocol {
-  func next() -> (option: Unicode.Scalar, argument: String?)? {
+  func next() -> Option? {
     needsReset = true
-    guard getopt(argc, argv.baseAddress, optstring) != -1 else { return nil }
-    let argument = optarg.map { String(cString: $0) }
-    return (option: currentOption, argument: argument)
+
+    switch getopt(argc, argv.baseAddress, optstring) {
+    case Int32(UInt8(ascii: ":")):
+      return .missingArgument(currentOption)
+    case Int32(UInt8(ascii: "?")):
+      return .unknown(currentOption)
+    case -1:
+      return nil
+    default:
+      if let argument = optarg {
+        return .argument(currentOption, String(cString: argument))
+      } else {
+        return .flag(currentOption)
+      }
+    }
   }
 }

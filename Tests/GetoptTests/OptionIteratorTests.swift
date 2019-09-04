@@ -12,13 +12,17 @@ final class OptionIteratorTests: XCTestCase {
     let iterator = OptionIterator(arguments: ["-abc", "foo"], options: "abc:")
     var count = 0
 
-    for case let (option, argument) in IteratorSequence(iterator) {
+    for option in IteratorSequence(iterator) {
       count += 1
 
       switch option {
-      case "a", "b":
-        XCTAssertNil(argument)
-      case "c":
+      case .argument("a", _), .argument("b", _):
+        XCTFail("Expected '\(option.name)' not to have an argument")
+      case .flag("a"), .flag("b"):
+        continue
+      case .flag("c"):
+        XCTFail("Expected 'c' to have an argument")
+      case let .argument("c", argument):
         XCTAssertEqual(argument, "foo")
       default:
         XCTFail("Unexpected option '\(option)'")
@@ -26,5 +30,17 @@ final class OptionIteratorTests: XCTestCase {
     }
 
     XCTAssertEqual(count, 3)
+  }
+
+  func testItHandlesUnrecognisedOptions() {
+    let iterator = OptionIterator(arguments: ["-abcd"], options: "cd")
+    let arguments = Array(IteratorSequence(iterator))
+    XCTAssertEqual(arguments, [.unknown("a"), .unknown("b"), .flag("c"), .flag("d")])
+  }
+
+  func testItHandlesMissingArguments() {
+    let iterator = OptionIterator(arguments: ["-a"], options: ":a:")
+    let arguments = Array(IteratorSequence(iterator))
+    XCTAssertEqual(arguments, [.missingArgument("a")])
   }
 }
