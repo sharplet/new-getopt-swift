@@ -17,10 +17,11 @@ final class OptionIterator {
   private let argc: Int32
   private let argv: ArgvBuffer
   private let isManaged: Bool
-  private let optstring: UnsafePointer<CChar>
-  private let staticOptions: StaticString
+  private let optstring: MutableCString
 
-  convenience init(argc: Int32, unsafeArgv argv: Argv, options: StaticString) {
+  let options: String
+
+  convenience init(argc: Int32, unsafeArgv argv: Argv, options: String) {
     self.init(
       argc: argc,
       argv: ArgvBuffer(start: argv, count: Int(argc) + 1),
@@ -29,7 +30,7 @@ final class OptionIterator {
     )
   }
 
-  convenience init(arguments: [String], options: StaticString) {
+  convenience init(arguments: [String], options: String) {
     let argc = arguments.count + 1
     let buffer = ArgvBuffer.allocate(capacity: argc + 1)
 
@@ -50,24 +51,12 @@ final class OptionIterator {
     )
   }
 
-  private init(argc: Int32, argv: ArgvBuffer, isManaged: Bool, options: StaticString) {
+  private init(argc: Int32, argv: ArgvBuffer, isManaged: Bool, options: String) {
     self.argc = argc
     self.argv = argv
     self.isManaged = isManaged
-    self.staticOptions = options
-
-    if options.hasPointerRepresentation {
-      self.optstring = UnsafeRawPointer(options.utf8Start).assumingMemoryBound(to: CChar.self)
-    } else {
-      self.optstring = options.withUTF8Buffer { buffer in
-        buffer.withMemoryRebound(to: CChar.self) { buffer in
-          let optstring = UnsafeMutablePointer<CChar>.allocate(capacity: buffer.count + 1)
-          optstring.initialize(from: buffer.baseAddress!, count: buffer.count)
-          optstring[buffer.count] = 0
-          return UnsafePointer(optstring)
-        }
-      }
-    }
+    self.options = options
+    self.optstring = strdup(options)
 
     opterr = 0
 
@@ -83,21 +72,11 @@ final class OptionIterator {
       argv.deallocate()
     }
 
-    if isOptstringManaged {
-      optstring.deallocate()
-    }
-  }
-
-  var options: String {
-    staticOptions.description
+    free(optstring)
   }
 
   private var currentOption: Unicode.Scalar {
     Unicode.Scalar(UInt32(optopt))!
-  }
-
-  private var isOptstringManaged: Bool {
-    !staticOptions.hasPointerRepresentation
   }
 
   private var managedRange: Range<Int> {
