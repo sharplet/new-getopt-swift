@@ -1,8 +1,9 @@
 import func Foundation.free
-import func Foundation.getopt
+import func Foundation.getopt_long
 import var Foundation.optarg
 import var Foundation.opterr
 import var Foundation.optind
+import struct Foundation.option
 import var Foundation.optopt
 import var Foundation.optreset
 import func Foundation.strdup
@@ -17,6 +18,7 @@ final class OptionIterator {
   private let argc: Int32
   private let argv: ArgvBuffer
   private let isManaged: Bool
+  private let longopts: UnsafeBufferPointer<option>
   private let optstring: MutableCString
 
   let options: String
@@ -55,6 +57,7 @@ final class OptionIterator {
     self.argc = argc
     self.argv = argv
     self.isManaged = isManaged
+    self.longopts = parseLongOptions(options)
     self.options = options
     self.optstring = strdup(options)
 
@@ -73,6 +76,7 @@ final class OptionIterator {
     }
 
     free(optstring)
+    freeLongOptions(longopts)
   }
 
   private var currentOption: Unicode.Scalar {
@@ -88,14 +92,15 @@ extension OptionIterator: IteratorProtocol {
   func next() -> Option? {
     needsReset = true
 
-    switch getopt(argc, argv.baseAddress, optstring) {
+    switch getopt_long(argc, argv.baseAddress, optstring, longopts.baseAddress, nil) {
     case Int32(UInt8(ascii: ":")):
       return .missingArgument(currentOption)
     case Int32(UInt8(ascii: "?")):
       return .unknown(currentOption)
     case -1:
       return nil
-    default:
+    case let rawValue:
+      let currentOption = Unicode.Scalar(UInt32(rawValue))!
       if let argument = optarg {
         return .argument(currentOption, String(cString: argument))
       } else {
