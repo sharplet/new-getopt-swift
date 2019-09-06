@@ -23,10 +23,10 @@ final class OptionIterator {
 
   let options: String
 
-  convenience init(argc: Int32, unsafeArgv argv: Argv, options: String) {
+  convenience init(options: String) {
     self.init(
-      argc: argc,
-      argv: ArgvBuffer(start: argv, count: Int(argc) + 1),
+      argc: CommandLine.argc,
+      argv: ArgvBuffer(start: CommandLine.unsafeArgv, count: Int(CommandLine.argc) + 1),
       isManaged: false,
       options: options
     )

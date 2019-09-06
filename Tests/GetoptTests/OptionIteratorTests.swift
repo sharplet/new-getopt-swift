@@ -3,7 +3,7 @@ import XCTest
 
 final class OptionIteratorTests: XCTestCase {
   func testItEnumeratesXCTestOptions() {
-    let iterator = OptionIterator(argc: CommandLine.argc, unsafeArgv: CommandLine.unsafeArgv, options: "NS:")
+    let iterator = OptionIterator(options: "NS:")
     let arguments = Array(IteratorSequence(iterator))
     XCTAssertGreaterThanOrEqual(arguments.count, 2)
   }
